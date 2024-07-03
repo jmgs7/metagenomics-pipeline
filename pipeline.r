@@ -346,6 +346,8 @@ count_tab <- read.table("ASVs_counts-no-contam.tsv", header = T, row.names = 1, 
 # remove control samples
 count_tab <- count_tab[, -grep("Control", colnames(count_tab))]
 colnames(count_tab) <- gsub("_R1.fastq.gz","", colnames(count_tab))
+# Add a pseudocount in case all genes have at least 1 zero (causes problems in DESeq2).
+count_tab = count_tab + 1 
 
 tax_tab <- as.matrix(read.table("ASVs_taxonomy-no-contam.tsv",
     header = T,
