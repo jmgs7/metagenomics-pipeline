@@ -354,7 +354,8 @@ tax_tab <- as.matrix(read.table("ASVs_taxonomy-no-contam.tsv",
 sample_info_tab <- rbindlist(lapply(colnames(count_tab), function(col.name){
   shunks <- unlist(strsplit(col.name,"-"))
   last_shunk <- shunks[length(shunks)]
-  f_letter <- unlist(strsplit(last_shunk,""))[1]
+  f_letter <- last_shunk
+  # f_letter <- unlist(strsplit(last_shunk,""))[1]
   data.frame(sample_name = col.name, group = f_letter)
 })) %>% as.data.frame()
 
