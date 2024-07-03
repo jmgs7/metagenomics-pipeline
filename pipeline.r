@@ -308,8 +308,9 @@ rownames(asv_tax) <- gsub(pattern = ">", replacement = "", x = asv_headers)
 
 write.table(asv_tax, "ASVs_taxonomy.tsv", sep = "\t", quote = F, col.names = NA)
 
+# You need to adjust the number of FALSES and TRUES and their order according to you sample distribution.
 colnames(asv_tab)
-vector_for_decontam <- c(rep(FALSE, 32), rep(TRUE, 1)) # TRUE is the possitive control (mock)
+vector_for_decontam <- c(rep(FALSE, 9), rep(TRUE, 3)) # TRUE is the possitive control (mock)
 
 contam_df <- isContaminant(t(asv_tab), neg = vector_for_decontam)
 
