@@ -212,20 +212,19 @@ aaa <- ggplot(median_values, aes(x = Base, y = Median, color = read)) +
 ggsave("fastqc/trimmed/threshold.pdf", aaa, width = 10, height = 5, units = "in")
 
 
-# First BaseNumMin of read R1 where Median is less than 25
+# First BaseNumMin of read R1 where Median is less than threshold.
 idx_1 <- which(median_values$read == "R1" & median_values$Median < qmin)[1]
 idx_2 <- which(median_values$read == "R2" & median_values$Median < qmin)[1]
 
 # get the base number
 # If all bases passed the phred score threshold, trim at least the last 10 bp of the full read just in case.
 
-maxLength = max(301, max(median_values$BaseNumMax))
-minimumTrimming <- maxLength - 10
+
+minimumTrimming <- max(median_values$BaseNumMax) - 10
 base1 <- ifelse(is.na(idx_1), minimumTrimming, min(minimumTrimming, median_values$BaseNumMin[idx_1]))
 base2 <- ifelse(is.na(idx_2), minimumTrimming, min(minimumTrimming, median_values$BaseNumMin[idx_2]))
 
 threshold <- list("R1" = base1, "R2" = base2)
-
 
 dir.create("filteredReads", showWarnings = FALSE)
 
@@ -236,7 +235,7 @@ names(rev_post_reads) <- samplesheet$sampleID
 
 if (!file.exists(fwd_post_reads[1])) {
     out <- filterAndTrim(fwd_reads, fwd_post_reads, rev_reads, rev_post_reads,
-        truncLen = c(threshold$R1, threshold$R2),
+        truncLen = 0,
         maxN = 0, maxEE = c(2, 2), truncQ = 2, rm.phix = TRUE,
         compress = TRUE, multithread = 10
     )
