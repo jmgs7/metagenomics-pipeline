@@ -138,9 +138,9 @@ if (!file.exists(glue("{outdir}/multiqc/multiqc_report.html"))) {
 # TRIMMING.
 
 launch_cutadapt <- function(sample_name, r1_file, r2_file) {
-  r1_output_file <- glue("{outdir}/{sample_name}_R1_fastq.gz")
-  r2_output_file <- glue("{outdir}/{sample_name}_R2_fastq.gz")
-  if (!file.exists(r1_fastq_file)) {
+  r1_output_file <- glue("{outdir}/{sample_name}_R1.fastq.gz")
+  r2_output_file <- glue("{outdir}/{sample_name}_R2.fastq.gz")
+  if (!file.exists(r1_output_file)) {
     system(glue("cutadapt -g GTGYCAGCMGCCGCGGTAA -a ATTAGAWACCCBNGTAGTCC -G GGACTACNVGGGTWTCTAAT -A TTACCGCGGCKGCTGRCAC -n 2 --match-read-wildcards --length 300 -m 150 --overlap 10 --discard-untrimmed -j $THREADS -o {r1_output_file} -p {r2_output_file} {r1_file} {r2_file}"))
   }
 }
@@ -154,6 +154,7 @@ mclapply(seq(1, nrow(samplesheet)), function(i) {
     r1_file <- samplesheet$forwardReads[i]
     r2_file <- samplesheet$reverseReads[i]
     launch_cutadapt(sample_name, r1_file, r2_file)
+    print(paste0("Processed ", sample_name))
   }, mc.cores = 10)
 
 # Launch fastqc
