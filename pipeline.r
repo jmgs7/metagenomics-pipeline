@@ -154,7 +154,6 @@ mclapply(seq(1, nrow(samplesheet)), function(i) {
     r1_file <- samplesheet$forwardReads[i]
     r2_file <- samplesheet$reverseReads[i]
     launch_cutadapt(sample_name, r1_file, r2_file)
-    print(paste0("Processed ", sample_name))
   }, mc.cores = 10)
 
 # Launch fastqc
@@ -218,8 +217,10 @@ idx_1 <- which(median_values$read == "R1" & median_values$Median < qmin)[1]
 idx_2 <- which(median_values$read == "R2" & median_values$Median < qmin)[1]
 
 # get the base number
-# If all bases passed the phred score threshold, trim at least the last 10 bp just in case.
-minimumTrimming <- max(median_values$BaseNumMax) - 10
+# If all bases passed the phred score threshold, trim at least the last 10 bp of the full read just in case.
+
+maxLength = max(301, max(median_values$BaseNumMax))
+minimumTrimming <- maxLength - 10
 base1 <- ifelse(is.na(idx_1), minimumTrimming, min(minimumTrimming, median_values$BaseNumMin[idx_1]))
 base2 <- ifelse(is.na(idx_2), minimumTrimming, min(minimumTrimming, median_values$BaseNumMin[idx_2]))
 
