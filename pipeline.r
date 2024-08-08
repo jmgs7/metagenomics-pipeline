@@ -94,7 +94,7 @@ launch_fastqc <- function(sample_name, r1_file, r2_file) {
     r1_fastqc_file <- glue("{outdir}/{sample_name}_R1_fastqc.zip")
     r2_fastqc_file <- glue("{outdir}/{sample_name}_R2_fastqc.zip")
     if (!file.exists(r1_fastqc_file)) {
-        system(glue("fastqc {r1_file} {r2_file} -o {outdir} -t 10 -q"))
+        system(glue("fastqc {r1_file} {r2_file} -o {outdir} -t $THREADS -a contaminants_earth_microbiome.txt -q"))
     }
     fastqc_data <- rbindlist(lapply(c(r1_fastqc_file, r2_fastqc_file), read_fastqc))
     breaks_show <- unique(fastqc_data$Base)
@@ -114,6 +114,7 @@ launch_fastqc <- function(sample_name, r1_file, r2_file) {
     return(fastqc_data)
 }
 
+# Launch fastqc
 outdir <- "fastqc"
 dir.create(outdir, showWarnings = F)
 outdir <- "fastqc/raw"
@@ -128,8 +129,64 @@ fastqc_stats <- rbindlist(mclapply(seq(1, nrow(samplesheet)), function(i) {
 
 head(fastqc_stats)
 
+# Launch multiqc.
+if (!file.exists(glue("{outdir}/multiqc/multiqc_report.html"))) {
+  system(glue("multiqc -o {outdir}/multiqc -q {outdir}"))
+}
+
+
+# TRIMMING.
+
+launch_cutadapt <- function(sample_name, r1_file, r2_file) {
+  r1_output_file <- glue("{outdir}/{sample_name}_R1_fastq.gz")
+  r2_output_file <- glue("{outdir}/{sample_name}_R2_fastq.gz")
+  if (!file.exists(r1_fastq_file)) {
+    system(glue("cutadapt -g GTGYCAGCMGCCGCGGTAA -a ATTAGAWACCCBNGTAGTCC -G GGACTACNVGGGTWTCTAAT -A TTACCGCGGCKGCTGRCAC -n 2 --match-read-wildcards --length 300 -m 150 --overlap 10 --discard-untrimmed -j $THREADS -o {r1_output_file} -p {r2_output_file} {r1_file} {r2_file}"))
+  }
+}
+
+# Launch cutadapt.
+dir.create("trimmedReads", showWarnings = FALSE)
+outdir <- "trimmedReads"
+
+mclapply(seq(1, nrow(samplesheet)), function(i) {
+    sample_name <- samplesheet$sampleID[i]
+    r1_file <- samplesheet$forwardReads[i]
+    r2_file <- samplesheet$reverseReads[i]
+    launch_cutadapt(sample_name, r1_file, r2_file)
+  }, mc.cores = 10)
+
+# Launch fastqc
+outdir <- "fastqc/trimmed"
+dir.create(outdir, showWarnings = F)
+
+fwd_reads <- file.path("trimmedReads", paste0(samplesheet$sampleID, "_R1.fastq.gz"))
+rev_reads <- file.path("trimmedReads", paste0(samplesheet$sampleID, "_R2.fastq.gz"))
+names(fwd_reads) <- samplesheet$sampleID
+names(rev_reads) <- samplesheet$sampleID
+
+samplesheet$forwardReads <- fwd_reads
+samplesheet$reverseReads <- rev_reads
+
+fastqc_stats <- rbindlist(mclapply(seq(1, nrow(samplesheet)), function(i) {
+  sample_name <- samplesheet$sampleID[i]
+  r1_file <- samplesheet$forwardReads[i]
+  r2_file <- samplesheet$reverseReads[i]
+  launch_fastqc(sample_name, r1_file, r2_file)
+}, mc.cores = 10))
+
+head(fastqc_stats)
+
+# Launch multiqc.
+if (!file.exists(glue("{outdir}/multiqc/multiqc_report.html"))) {
+  system(glue("multiqc -o {outdir}/multiqc -q {outdir}"))
+}
+
+
+
+# QUALITY TRIMMING.
 # set threshold
-qmin <- 25
+qmin <- 30
 
 # get median values for each cycle by read
 median_values <- fastqc_stats %>%
@@ -152,7 +209,7 @@ aaa <- ggplot(median_values, aes(x = Base, y = Median, color = read)) +
     scale_x_discrete(breaks = breaks_show) +
     theme_classic() +
     geom_hline(yintercept = qmin, color = "red")
-ggsave("fastqc/raw/threshold.pdf", aaa, width = 10, height = 5, units = "in")
+ggsave("fastqc/trimmed/threshold.pdf", aaa, width = 10, height = 5, units = "in")
 
 
 # First BaseNumMin of read R1 where Median is less than 25
@@ -168,14 +225,10 @@ base2 <- ifelse(is.na(idx_2), minimumTrimming, min(minimumTrimming, median_value
 threshold <- list("R1" = base1, "R2" = base2)
 
 
-dir.create("trimmedReads", showWarnings = FALSE)
+dir.create("filteredReads", showWarnings = FALSE)
 
-fwd_reads <- samplesheet$forwardReads
-rev_reads <- samplesheet$reverseReads
-
-fwd_post_reads <- file.path("trimmedReads", paste0(samplesheet$sampleID, "_R1.fastq.gz"))
-rev_post_reads <- file.path("trimmedReads", paste0(samplesheet$sampleID, "_R2.fastq.gz"))
-
+fwd_post_reads <- file.path("filteredReads", paste0(samplesheet$sampleID, "_R1.fastq.gz"))
+rev_post_reads <- file.path("filteredReads", paste0(samplesheet$sampleID, "_R2.fastq.gz"))
 names(fwd_post_reads) <- samplesheet$sampleID
 names(rev_post_reads) <- samplesheet$sampleID
 
@@ -191,7 +244,7 @@ if (!file.exists(fwd_post_reads[1])) {
 samplesheet$forwardReads <- fwd_post_reads
 samplesheet$reverseReads <- rev_post_reads
 
-outdir <- "fastqc/trimmed"
+outdir <- "fastqc/filtered"
 dir.create(outdir, showWarnings = F)
 
 fastqc_stats <- rbindlist(mclapply(seq(1, nrow(samplesheet)), function(i) {
@@ -202,6 +255,15 @@ fastqc_stats <- rbindlist(mclapply(seq(1, nrow(samplesheet)), function(i) {
 }, mc.cores = 10))
 
 head(fastqc_stats)
+
+# Launch multiqc.
+if (!file.exists(glue("{outdir}/multiqc/multiqc_report.html"))) {
+  system(glue("multiqc -o {outdir}/multiqc -q {outdir}"))
+}
+
+
+
+# DADA2.
 
 derep_fn <- function(read) {
     fastq_files <- samplesheet %>%
