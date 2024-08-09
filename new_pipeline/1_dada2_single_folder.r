@@ -69,7 +69,7 @@ ref3 <- create_fa_from_blast(ref3)
 # para que sea menos pesado quise hacerlo por run, asi que elige el primer run
 fastq.folder <- fastq.folders.list[1]
 
-lapply(fastq.folders.list, function(fastq.folder) {
+
     # create folders
     folder.id <- unlist(strsplit(basename(fastq.folder), "_"))[1]
     trimmed.folder <- paste0(folder.id, "_trimmed")
@@ -112,7 +112,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
                     "--length 300", # Truncate reads to 300 bp
                     "-m 150", # discard reads shorter than LEN (avoid length zero sequences)
                     "--overlap 10", # min overlap between read and adapter for an adapter to be found
-                    "-j $THREADS", # auto-detection of CPU cores, only available on Python 3
+                    "-j 0", # auto-detection of CPU cores, only available on Python 3
                     "--discard-untrimmed",
                     "-o", fnFs.cut[i], "-p", fnRs.cut[i], # trimmed files
                     fnFs[i], fnRs[i]
@@ -163,57 +163,15 @@ lapply(fastq.folders.list, function(fastq.folder) {
     mergers <- merge_function(dadaFs, filtFs, dadaRs, filtRs, outfiles.folder)
     seqtab <- makeSequenceTable(mergers)
     # launch remove bimera
-    seqtab.nochim = removebimera_function(seqtab, outfiles.folder)
-    rownames(seqtab.nochim) = sample.names
-    
-    # giving our seq headers more manageable names (ASV_1, ASV_2...)
-    asv_seqs <- colnames(seqtab.nochim)
-    asv_headers <- vector(dim(seqtab.nochim)[2], mode = "character")
-    
-    for (i in 1:dim(seqtab.nochim)[2]) {
-      asv_headers[i] <- paste(">ASV", i, sep = "_")
-    }
-    
-    # making and writing out a fasta of our final ASV seqs:
-    asv_fasta <- c(rbind(asv_headers, asv_seqs))
-    write(asv_fasta, "ASVs.fa")
-    
-    # count table:
-    asv_tab <- t(seqtab.nochim)
-    row.names(asv_tab) <- sub(">", "", asv_headers)
-    write.table(asv_tab, "ASVs_counts.tsv", sep = "\t", quote = F, col.names = NA)
+    seqtab.nochim <- removebimera_function(seqtab, outfiles.folder)
+    rownames(seqtab.nochim) <- sample.names
     
     # You need to adjust the number of FALSES and TRUES and their order according to you sample distribution.
-    
-    vector_for_decontam <-  grepl("control-negativo", colnames(asv_tab), ignore.case = TRUE) # TRUE is the negative control.
-    
-    contam_df <- isContaminant(t(asv_tab), neg = vector_for_decontam)
-    
-    table(contam_df$contaminant) # identified 7 as contaminants
-    
+    vector_for_decontam <-  grepl("control-negativo", rownames(seqtab.nochim), ignore.case = TRUE) # TRUE is the negative control.
+    contam_df <- isContaminant(seqtab.nochim, neg = vector_for_decontam)
     contam_asvs <- row.names(contam_df[contam_df$contaminant == TRUE, ])
-    
-    # making new fasta file
-    contam_indices <- which(asv_fasta %in% paste0(">", contam_asvs))
-    dont_want <- sort(c(contam_indices, contam_indices + 1))
-    asv_fasta_no_contam <- asv_fasta[-dont_want]
-    
-    # making new count table
-    asv_tab_no_contam <- asv_tab[!row.names(asv_tab) %in% contam_asvs, ]
-    seqtab.nochim.nocontam <- t(asv_tab_no_contam)
-    
-    # making new taxonomy table
-    asv_tax_no_contam <- asv_tax[!row.names(asv_tax) %in% contam_asvs, ]
-    
-    ## and now writing them out to files
-    write(asv_fasta_no_contam, "ASVs-no-contam.fa")
-    write.table(asv_tab_no_contam, "ASVs_counts-no-contam.tsv",
-                sep = "\t", quote = F, col.names = NA
-    )
-    write.table(asv_tax_no_contam, "ASVs_taxonomy-no-contam.tsv",
-                sep = "\t", quote = F, col.names = NA
-    )
-    
+    seqtab.nochim.nocontam <- seqtab.nochim[,-contam_asvs]
+
     # assign tax
     taxatab <- assign_taxonomy(seqtab.nochim.nocontam, ref1, ref2, ref3, outfiles.folder)
     spec_silva <- taxatab[[2]]
@@ -224,14 +182,14 @@ lapply(fastq.folders.list, function(fastq.folder) {
     ##############################################################################
     # esto lo encontré https://github.com/ycl6/16S-Demo
     # lo que hace es un merge de addSpecies de Silva y de NCBI
-    SVformat = paste("%0",nchar(as.character(ncol(seqtab.nochim.nocontam))),"d", sep = "")
-    svid = paste0("SV", sprintf(SVformat, seq(ncol(seqtab.nochim.nocontam))))
+    ASVformat = paste("%0",nchar(as.character(ncol(seqtab.nochim.nocontam))),"d", sep = "")
+    asv_id = paste0("ASV", sprintf(ASVformat, seq(ncol(seqtab.nochim.nocontam))))
 
     s_silva = as.data.frame(spec_silva, stringsAsFactors = FALSE)
-    rownames(s_silva) = svid
+    rownames(s_silva) = asv_id
 
     s_ncbi = as.data.frame(spec_ncbi, stringsAsFactors = FALSE)
-    rownames(s_ncbi) = svid
+    rownames(s_ncbi) = asv_id
     s_ncbi$Genus = gsub("\\[|\\]", "", s_ncbi$Genus)
 
     s_merged = cbind(s_ncbi, s_silva)
@@ -281,7 +239,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
     # #' 
     # ## ----prepare-df---------------------------------------------------------------
     df = data.frame(sequence = seqs, abundance = colSums(seqtab.nochim.nocontam), stringsAsFactors = FALSE)
-    df$id = svid
+    df$id = asv_id
     df = merge(df, as.data.frame(taxtab), by = "row.names")
     rownames(df) = df$id
     df = df[order(df$id),2:ncol(df)]
@@ -309,7 +267,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
     # ## ----export-alignment, cache = TRUE-------------------------------------------
     
     export_alignment <- function(alignment, outfiles.folder){
-      rds_phang <- file.path(outfiles.foldes,"phan.rds")
+      rds_phang <- file.path(outfiles.folder,"phan.rds")
       if (!file.exists(rds_phang)){
         phang.align = phyDat(as(alignment, "matrix"), type = "DNA")
         saveRDS(phang.align, file = rds_phang)
@@ -358,18 +316,26 @@ lapply(fastq.folders.list, function(fastq.folder) {
     # #' 
     # ## ----import-tree--------------------------------------------------------------
     raxml_tree = construct_tree(raxml, raxmlng)
-
-    samdf <- rbindlist(lapply(sample.names, function(x){
-      if (grepl("_", x)){
-        x_id <- unlist(strsplit(x, "_"))
-        x_id <- unlist(strsplit(x_id[2], "t"))
-        return(data.frame(id = x, sample = x_id[1], time = x_id[2]))
-      } else{
-        return(data.frame(id = x, sample = x, time = 0))
-      }
+    
+    # Obtenemos la información de cada muestra a través de su nombre de archivo, que hemos modificado para que sean altamente informativos.
+    filenames <- list.files(fastq.folder, pattern = "R1_001.fastq.gz", full.names = FALSE)
+    filenames <- gsub("_R1_001.fastq.gz", "", filenames)
+    
+    sample_tab <- rbindlist(lapply(filenames, function(col.name){
+      shunks <- unlist(strsplit(col.name,"_"))
+      sample_name <- shunks[1]
+      batch <- shunks[4]
+      
+      shunks <- unlist(strsplit(sample_name,"-"))
+      sample <- shunks[1]
+      sample_number <- shunks[2]
+      time <- shunks[3]
+      group <- shunks[length(shunks)]
+      time_group = paste0(time, "_", group)
+      data.frame(sample_name = sample_name, sample = sample, sample_number = sample_number, time = time, group = group, time_group = time_group, batch = batch)
     })) %>% as.data.frame()
-
-    rownames(samdf) <- sample.names
+    
+    rownames(sample_tab) <- sample_tab$sample_name
 
     # #' 
     # #' # Handoff to `phyloseq`
@@ -377,6 +343,8 @@ lapply(fastq.folders.list, function(fastq.folder) {
     # #' Prepare `new_seqtab` and `tax` data.frames containing abundance and taxonomy information respectively.
     # #' 
     # ## ----create-tax---------------------------------------------------------------
+    
+    
     new_seqtab = seqtab.nochim.nocontam
     colnames(new_seqtab) = df[match(colnames(new_seqtab), df$sequence),]$id
     
@@ -389,10 +357,8 @@ lapply(fastq.folders.list, function(fastq.folder) {
     tax = as.data.frame(new_taxtab$tax)
     tax$Family = as.character(tax$Family)
     tax$Genus = as.character(tax$Genus)
-
+    
     ps = phyloseq(tax_table(as.matrix(tax)),
-                  sample_data(samdf),
+                  sample_data(sample_tab),
                   otu_table(new_seqtab, taxa_are_rows = FALSE),
                   phy_tree(raxml_tree))
-    
-})
