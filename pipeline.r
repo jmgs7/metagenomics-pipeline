@@ -235,7 +235,7 @@ names(rev_post_reads) <- samplesheet$sampleID
 
 if (!file.exists(fwd_post_reads[1])) {
     out <- filterAndTrim(fwd_reads, fwd_post_reads, rev_reads, rev_post_reads,
-        truncLen = 0,
+        truncLen = c(threshold$R1, threshold$R2),
         maxN = 0, maxEE = c(2, 2), truncQ = 2, rm.phix = TRUE,
         compress = TRUE, multithread = 10
     )
