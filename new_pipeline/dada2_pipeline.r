@@ -249,7 +249,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
     align_seqs <- function(df){
       rds_align <- file.path(outfiles.folder, "align.rds")
       if (!file.exists(rds_align)){
-        alignment = AlignSeqs(Biostrings::DNAStringSet(setNames(df$sequence, df$id)), anchor = NA, processors = 10)
+        alignment = AlignSeqs(Biostrings::DNAStringSet(setNames(df$sequence, df$id)), anchor = NA, processors = detectCores())
         saveRDS(alignment, file = rds_align)
       }
       alignment <- readRDS(rds_align)
@@ -292,14 +292,14 @@ lapply(fastq.folders.list, function(fastq.folder) {
     construct_tree <- function(raxml, raxmlng){
       raxml_tree <- glue("{outfiles.folder}/RAxML_binaryModelParameters.raxml_tree_GTRCAT")
       if (!file.exists(raxml_tree)){
-        system2(raxml, args = c("-T 10", "-f E", "-p 1234", "-x 5678", "-m GTRCAT", "-N 1",
+        system2(raxml, args = c("-T $THREADS", "-f E", "-p 1234", "-x 5678", "-m GTRCAT", "-N 1",
                                 glue("-s {outfiles.folder}/alignment.aln"), "-n raxml_tree_GTRCAT"))
         system(glue("mv RAxML* {outfiles.folder}"))
       }
       
       raxmlng_tree <- glue("{outfiles.folder}/GTRCAT.raxml.bestModel")
       if (!file.exists(raxmlng_tree)){
-        system2(raxmlng, args = c("--evaluate", "--force", "--seed 1234", "--log progress", "--threads 10",
+        system2(raxmlng, args = c("--evaluate", "--force", "--seed 1234", "--log progress", "--threads $THREADS",
                                   glue("--msa {outfiles.folder}/alignment.fasta"),  "--model GTR+G", "--brlen scaled",
                                   glue("--tree {outfiles.folder}/RAxML_fastTree.raxml_tree_GTRCAT"), "--prefix GTRCAT"))
         system(glue("mv GTRCAT* {outfiles.folder}"))
@@ -372,5 +372,5 @@ lapply(fastq.folders.list, function(fastq.folder) {
                   sample_data(sample_tab),
                   otu_table(new_seqtab, taxa_are_rows = FALSE),
                   phy_tree(raxml_tree))
-    save(ps, file = "phyloseq.rdata")
+    save(ps, file = file.path(outfiles.folder, "phyloseq.rdata"))
 })
