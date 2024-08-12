@@ -6,7 +6,7 @@ filter_and_trim <- function(fnFs, filtFs, fnRs, filtRs, trunc_parameters, outfil
             # Need to keep paramters consistent between runs of the same study
             truncLen = c(trunc_parameters$forwardReads, trunc_parameters$reverseReads),
             maxN = 0, truncQ = 2, maxEE = c(2, 2),
-            rm.phix = TRUE, compress = TRUE, verbose = TRUE, multithread = 10
+            rm.phix = TRUE, compress = TRUE, verbose = TRUE, multithread = TRUE
         )
         saveRDS(out, file = rds_file)
     }
@@ -18,8 +18,8 @@ err_function <- function(filtFs, filtRs, outfiles.folder){
   rds_err_r1 <- file.path(outfiles.folder, "err_r1.rds")
   rds_err_r2 <- file.path(outfiles.folder, "err_r2.rds")
   if (!file.exists(rds_err_r1) | !file.exists(rds_err_r2)) {
-    errF = learnErrors(filtFs, multithread = 10)
-    errR = learnErrors(filtRs, multithread = 10)
+    errF = learnErrors(filtFs, multithread = TRUE)
+    errR = learnErrors(filtRs, multithread = TRUE)
     saveRDS(errF, file = rds_err_r1)
     saveRDS(errR, file = rds_err_r2)
   }
@@ -32,8 +32,8 @@ dada_function <- function(filtFs, filtRs, errF, errR, outfiles.folder){
   rds_dadaFs <- file.path(outfiles.folder, "dadaFs.rds")
   rds_dadaRs <- file.path(outfiles.folder, "dadaRs.rds")
   if (!file.exists(rds_dadaFs) | !file.exists(rds_dadaRs)) {
-    dadaFs = dada(filtFs, err = errF, pool = FALSE, multithread = 10)
-    dadaRs = dada(filtRs, err = errR, pool = FALSE, multithread = 10)
+    dadaFs = dada(filtFs, err = errF, pool = FALSE, multithread = TRUE)
+    dadaRs = dada(filtRs, err = errR, pool = FALSE, multithread = TRUE)
     saveRDS(dadaFs, file = rds_dadaFs)
     saveRDS(dadaRs, file = rds_dadaRs)
   }
@@ -69,7 +69,7 @@ assign_taxonomy <- function(seqtab.nochim, ref1, ref2, ref3, outfiles.folder){
   if (!file.exists(rds_taxa)) {
     set.seed(12345)
     taxtab = assignTaxonomy(seqs, refFasta = ref1, minBoot = 80, tryRC = TRUE, verbose = TRUE,
-                            outputBootstraps = TRUE, multithread = 10)
+                            outputBootstraps = TRUE, multithread = TRUE)
     saveRDS(taxtab, file = rds_taxa)
   }
   taxtab = readRDS(rds_taxa)

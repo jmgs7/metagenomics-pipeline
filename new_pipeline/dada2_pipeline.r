@@ -15,8 +15,6 @@ suppressMessages(library(ShortRead))
 source("~/Documents/Pipelines/metagenomics/new_pipeline/code/qc_analysis.r")
 source("~/Documents/Pipelines/metagenomics/new_pipeline/code/dada2.r")
 
-setwd("/home/jose/Data/Metagenomics/Dolores_Mesa_Metagenomics/test")
-
 folders.list <- list.dirs(recursive = FALSE)
 fastq.folders.list <- folders.list[grepl("rawReads", folders.list)]
 
@@ -34,10 +32,10 @@ dbpath <- "db/"
 if (!file.exists(dbpath)) dir.create(dbpath)
 
 download_file <- function(url, destfile){
-   if (!file.exists(destfile)){
-     download.file(url, destfile = destfile)
-   }
- }
+  if (!file.exists(destfile)){
+    download.file(url, destfile = destfile)
+  }
+}
 
 download.file("http://evomics.org/wp-content/uploads/2016/01/taxa_summary.R.gz", "taxa_summary.R.gz")
 system("gunzip -f taxa_summary.R.gz")
@@ -61,15 +59,14 @@ create_fa_from_blast <- function(ref3 ){
     system(glue("tar zxf {ref3} -C {dbpath}"))
     system(glue("/home/jose/anaconda3/envs/metagenomics/bin/blastdbcmd -db {dbpath}16S_ribosomal_RNA -entry all -out {dbpath}16SMicrobial.fa"))
     system(glue("gzip {dbpath}16SMicrobial.fa"))
-    }
-     return(outfile)
+  }
+  return(outfile)
 }
 ref3 <- create_fa_from_blast(ref3)
 
-# para que sea menos pesado quise hacerlo por run, asi que elige el primer run
-fastq.folder <- fastq.folders.list[1]
-
-
+lapply(fastq.folders.list, function(fastq.folder) {
+    print(paste0("Processing: ", fastq.folder))
+  
     # create folders
     folder.id <- unlist(strsplit(basename(fastq.folder), "_"))[1]
     trimmed.folder <- paste0(folder.id, "_trimmed")
@@ -148,7 +145,7 @@ fastq.folder <- fastq.folders.list[1]
     out <- as.data.frame(out)
     rownames(out) <- sample.names
     write.table(file = "quality_trimming.tsv", out, row.names = TRUE, col.names = TRUE, quote = FALSE, sep = "\t")
-
+    
     # launch err_function
     errs <- err_function(filtFs, filtRs, outfiles.folder)
     errF <- errs[[1]]
@@ -162,16 +159,18 @@ fastq.folder <- fastq.folders.list[1]
     # launch mergepairs
     mergers <- merge_function(dadaFs, filtFs, dadaRs, filtRs, outfiles.folder)
     seqtab <- makeSequenceTable(mergers)
-    # launch remove bimera
-    seqtab.nochim <- removebimera_function(seqtab, outfiles.folder)
-    rownames(seqtab.nochim) <- sample.names
     
+    # launch remove bimera
+    seqtab.nochim = removebimera_function(seqtab, outfiles.folder)
+    rownames(seqtab.nochim) = sample.names
+    
+    # launch decontam.
     # You need to adjust the number of FALSES and TRUES and their order according to you sample distribution.
     vector_for_decontam <-  grepl("control-negativo", rownames(seqtab.nochim), ignore.case = TRUE) # TRUE is the negative control.
     contam_df <- isContaminant(seqtab.nochim, neg = vector_for_decontam)
     contam_asvs <- row.names(contam_df[contam_df$contaminant == TRUE, ])
-    seqtab.nochim.nocontam <- seqtab.nochim[,-contam_asvs]
-
+    seqtab.nochim.nocontam <- seqtab.nochim[,!colnames(seqtab.nochim) %in% contam_asvs]
+    
     # assign tax
     taxatab <- assign_taxonomy(seqtab.nochim.nocontam, ref1, ref2, ref3, outfiles.folder)
     spec_silva <- taxatab[[2]]
@@ -182,14 +181,14 @@ fastq.folder <- fastq.folders.list[1]
     ##############################################################################
     # esto lo encontré https://github.com/ycl6/16S-Demo
     # lo que hace es un merge de addSpecies de Silva y de NCBI
-    ASVformat = paste("%0",nchar(as.character(ncol(seqtab.nochim.nocontam))),"d", sep = "")
-    asv_id = paste0("ASV", sprintf(ASVformat, seq(ncol(seqtab.nochim.nocontam))))
+    SVformat = paste("%0",nchar(as.character(ncol(seqtab.nochim.nocontam))),"d", sep = "")
+    svid = paste0("ASV_", sprintf(SVformat, seq(ncol(seqtab.nochim.nocontam))))
 
     s_silva = as.data.frame(spec_silva, stringsAsFactors = FALSE)
-    rownames(s_silva) = asv_id
+    rownames(s_silva) = svid
 
     s_ncbi = as.data.frame(spec_ncbi, stringsAsFactors = FALSE)
-    rownames(s_ncbi) = asv_id
+    rownames(s_ncbi) = svid
     s_ncbi$Genus = gsub("\\[|\\]", "", s_ncbi$Genus)
 
     s_merged = cbind(s_ncbi, s_silva)
@@ -230,16 +229,14 @@ fastq.folder <- fastq.folders.list[1]
     taxtab$tax[!gen.match,"Species"] = NA
     print(paste("Of which", sum(!is.na(taxtab$tax[,"Species"])),
                 "had genera consistent with the input table."))
-    
-    
     # #' 
     # #' # Multiple sequence alignment
     # #' 
-    # #' Prepare a `data.frame` `df` from `seqtab.nochim.nocontam` and `taxtab`.
+    # #' Prepare a `data.frame` `df` from `seqtab.nochim` and `taxtab`.
     # #' 
     # ## ----prepare-df---------------------------------------------------------------
     df = data.frame(sequence = seqs, abundance = colSums(seqtab.nochim.nocontam), stringsAsFactors = FALSE)
-    df$id = asv_id
+    df$id = svid
     df = merge(df, as.data.frame(taxtab), by = "row.names")
     rownames(df) = df$id
     df = df[order(df$id),2:ncol(df)]
@@ -336,6 +333,7 @@ fastq.folder <- fastq.folders.list[1]
     })) %>% as.data.frame()
     
     rownames(sample_tab) <- sample_tab$sample_name
+    write.table(sample_tab, "sample_sheet.tsv", sep = "\t", quote = F, col.names = NA)
 
     # #' 
     # #' # Handoff to `phyloseq`
@@ -343,22 +341,36 @@ fastq.folder <- fastq.folders.list[1]
     # #' Prepare `new_seqtab` and `tax` data.frames containing abundance and taxonomy information respectively.
     # #' 
     # ## ----create-tax---------------------------------------------------------------
-    
-    
     new_seqtab = seqtab.nochim.nocontam
     colnames(new_seqtab) = df[match(colnames(new_seqtab), df$sequence),]$id
+    write.table(t(new_seqtab), "ASVs_counts.tsv",
+                sep = "\t", quote = F, col.names = NA
+    )
     
-    # # Update rownames in new_seqtab from Run_ID to Sample_ID
-    rownames(new_seqtab) = as.character(samdf[match(rownames(new_seqtab), samdf$`run ID`),]$Sample_ID)
-    
+    # Create taxonomy table.
     new_taxtab = taxtab
     rownames(new_taxtab$tax) = df[match(rownames(new_taxtab$tax), df$sequence),]$id
-    
     tax = as.data.frame(new_taxtab$tax)
     tax$Family = as.character(tax$Family)
     tax$Genus = as.character(tax$Genus)
+    write.table(tax, "ASVs_taxonomy.tsv",
+                sep = "\t", quote = F, col.names = NA
+    )
+    write.table(new_taxtab, "ASVs_taxonomy_scores.tsv",
+                sep = "\t", quote = F, col.names = NA
+    )
+      
+    # giving our seq headers more manageable names (ASV_1, ASV_2...)
+    asv_seqs <- colnames(seqtab.nochim.nocontam)
+    asv_headers <- paste0(">", df[match(colnames(seqtab.nochim.nocontam), df$sequence),]$id)
     
+    # making and writing out a fasta of our final ASV seqs:
+    asv_fasta <- c(rbind(asv_headers, asv_seqs))
+    write(asv_fasta, "ASVs_sequences.fa")
+
     ps = phyloseq(tax_table(as.matrix(tax)),
                   sample_data(sample_tab),
                   otu_table(new_seqtab, taxa_are_rows = FALSE),
                   phy_tree(raxml_tree))
+    save(ps, file = "phyloseq.rdata")
+})
