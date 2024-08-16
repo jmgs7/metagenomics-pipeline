@@ -143,7 +143,7 @@ trunc_estimation <- function(fqc_table, min_qual = 25) {
   if (nrow(fqc_table_filt) == 0) {
     return(max(fqc_table$Cycle) - 10)
   } else {
-    # Otherwise, return the minimum cycle from the filtered.
-    return(min(fqc_table_filt$Cycle))
+    # Otherwise, return the minimum cycle from the filtered, but it will always trim at least the last 10 positions.
+    return(min(max(fqc_table$Cycle) - 10, min(fqc_table_filt$Cycle)))
   }
 }
