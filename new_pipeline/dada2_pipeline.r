@@ -1,5 +1,7 @@
 #!/usr/bin/env Rscript
 
+# This script is heavily based on https://github.com/ycl6/16S-Demo
+
 suppressMessages(library(tidyverse))
 suppressMessages(library(parallel))
 suppressMessages(library(data.table))
@@ -133,6 +135,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
     # qc and trunc estimation
     raw_fqc <- fastq_quality_control(sample_sheet, images.folder, raw = TRUE)
     trunc_parameters <- lapply(raw_fqc, trunc_estimation, min_qual = 30)
+    cat(paste0("\nTrunc parameters :", trunc_parameters, "\n"))
 
     # set filter files
     filtFs <- file.path(filt.folder, basename(fnFs))
@@ -179,7 +182,6 @@ lapply(fastq.folders.list, function(fastq.folder) {
     taxtab <- taxatab[[1]]
 
     ##############################################################################
-    # esto lo encontré https://github.com/ycl6/16S-Demo
     # lo que hace es un merge de addSpecies de Silva y de NCBI
     SVformat = paste("%0",nchar(as.character(ncol(seqtab.nochim.nocontam))),"d", sep = "")
     svid = paste0("ASV_", sprintf(SVformat, seq(ncol(seqtab.nochim.nocontam))))
