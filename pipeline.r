@@ -135,7 +135,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
     # qc and trunc estimation
     raw_fqc <- fastq_quality_control(sample_sheet, images.folder, raw = TRUE)
     trunc_parameters <- lapply(raw_fqc, trunc_estimation, min_qual = 30)
-    cat(paste0("\nTrunc parameters :", trunc_parameters, "\n"))
+    cat(paste0("\nTrunc parameters: ", trunc_parameters, "\n"))
 
     # set filter files
     filtFs <- file.path(filt.folder, basename(fnFs))
@@ -307,6 +307,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
         system(glue("mv GTRCAT* {outfiles.folder}"))
       }
       raxml_tree = read_tree(glue("{outfiles.folder}/GTRCAT.raxml.bestTree"))
+      system(glue("cp {outfiles.folder}/GTRCAT.raxml.bestTree ./phylogenetic_tree.tree"))
       return(raxml_tree)
     }
     
@@ -372,7 +373,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
 
     ps = phyloseq(tax_table(as.matrix(tax)),
                   sample_data(sample_tab),
-                  otu_table(new_seqtab, taxa_are_rows = FALSE),
+                  otu_table(new_seqtab, taxa_are_rows = TRUE),
                   phy_tree(raxml_tree))
-    save(ps, file = file.path(outfiles.folder, "phyloseq.rdata"))
+    save(ps, file = file.path(outfiles.folder, "phyloseq_object.rdata"))
 })
