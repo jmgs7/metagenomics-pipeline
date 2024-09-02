@@ -14,8 +14,8 @@ suppressMessages(library(DESeq2))
 suppressMessages(library(vegan))
 suppressMessages(library(phangorn))
 suppressMessages(library(ShortRead))
-source("./lib/qc_analysis.r")
-source("./lib/dada2.r")
+source("~/Documents/Pipelines/metagenomics/lib/qc_analysis.r")
+source("~/Documents/Pipelines/metagenomics/lib/dada2.r")
 
 folders.list <- list.dirs(recursive = FALSE)
 fastq.folders.list <- folders.list[grepl("rawReads", folders.list)]
