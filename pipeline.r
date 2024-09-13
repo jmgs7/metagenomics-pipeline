@@ -21,7 +21,7 @@ folders.list <- list.dirs(recursive = FALSE)
 fastq.folders.list <- folders.list[grepl("rawReads", folders.list)]
 
 # cutadapt path
-cutadapt <- "/home/jose/anaconda3/envs/metagenomics/bin/cutadapt" # cutadapt version 4.9
+cutadapt <- "~/anaconda3/envs/metagenomics/bin/cutadapt" # cutadapt version 4.9
 FWD <- "GTGYCAGCMGCCGCGGTAA" # 515F
 REV <- "GGACTACNVGGGTWTCTAAT" # 806R
 FWD.RC <- dada2::rc(FWD)
@@ -59,7 +59,7 @@ create_fa_from_blast <- function(ref3 ){
   outfile <- paste0(dbpath, "16SMicrobial.fa.gz")
   if (!file.exists(outfile)) {
     system(glue("tar zxf {ref3} -C {dbpath}"))
-    system(glue("/home/jose/anaconda3/envs/metagenomics/bin/blastdbcmd -db {dbpath}16S_ribosomal_RNA -entry all -out {dbpath}16SMicrobial.fa"))
+    system(glue("~/anaconda3/envs/metagenomics/bin/blastdbcmd -db {dbpath}16S_ribosomal_RNA -entry all -out {dbpath}16SMicrobial.fa"))
     system(glue("gzip {dbpath}16SMicrobial.fa"))
   }
   return(outfile)
@@ -288,10 +288,13 @@ lapply(fastq.folders.list, function(fastq.folder) {
     # #' Set the full-path to the RAxML and RAxML-NG.
     # #' 
     # ## ----set-raxml-path, eval = FALSE---------------------------------------------
-    raxml = "/home/jose/anaconda3/envs/metagenomics/bin/raxmlHPC-PTHREADS-SSE3"		# e.g. /usr/local/bin/raxmlHPC-PTHREADS-SSE3
-    raxmlng = "/home/jose/anaconda3/envs/metagenomics/bin/raxml-ng"	# e.g. /usr/local/bin/raxml-ng
+    # Multithreading and AVX2 instruction set for better performance.
+    raxml = "~/anaconda3/envs/metagenomics/bin/raxmlHPC-PTHREADS-AVX"		# e.g. /usr/local/bin/raxmlHPC-PTHREADS-AVX.
+    raxmlng = "~/anaconda3/envs/metagenomics/bin/raxml-ng"	# e.g. /usr/local/bin/raxml-ng
     
     construct_tree <- function(raxml, raxmlng){
+      
+      # 1. Construct the tree using GTRCAT model with RAxML.
       raxml_tree <- glue("{outfiles.folder}/RAxML_binaryModelParameters.raxml_tree_GTRCAT")
       if (!file.exists(raxml_tree)){
         system2(raxml, args = c("-T $THREADS", "-f E", "-p 1234", "-x 5678", "-m GTRCAT", "-N 1",
@@ -299,6 +302,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
         system(glue("mv RAxML* {outfiles.folder}"))
       }
       
+      # 2. Optimize the topology using RAxML Next Generation (raxmlng).
       raxmlng_tree <- glue("{outfiles.folder}/GTRCAT.raxml.bestModel")
       if (!file.exists(raxmlng_tree)){
         system2(raxmlng, args = c("--evaluate", "--force", "--seed 1234", "--log progress", "--threads $THREADS",
@@ -371,6 +375,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
     asv_fasta <- c(rbind(asv_headers, asv_seqs))
     write(asv_fasta, "ASVs_sequences.fa")
 
+    # create and export phyloseq object for later analysis
     ps = phyloseq(tax_table(as.matrix(tax)),
                   sample_data(sample_tab),
                   otu_table(new_seqtab, taxa_are_rows = TRUE),
