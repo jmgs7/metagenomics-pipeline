@@ -135,8 +135,10 @@ fastq_quality_control <- function(samplesheet, result_folder, raw) {
 #' @param fqc_table A data frame containing quality control metrics.
 #' @param min_qual The minimum quality score to consider for truncation. Default is 25.
 #' @return The estimated truncation cycle.
-trunc_estimation <- function(fqc_table, min_qual = 25) {
+trunc_estimation <- function(fqc_table, min_qual = 25, p = 0.75) {
   # Filter the quality control table for cycles with median quality below or equal to the minimum quality
+  nreads <- max(fqc_table$Count)
+  fqc_table <- fqc_table %>% filter(Count >= nreads * p)
   fqc_table_filt <- fqc_table %>%
     filter(Median <= min_qual)
   # If no rows are found after filtering, return the maximum cycle minus 10
