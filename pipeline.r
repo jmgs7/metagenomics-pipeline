@@ -21,7 +21,7 @@ folders.list <- list.dirs(recursive = FALSE)
 fastq.folders.list <- folders.list[grepl("rawReads", folders.list)]
 
 # cutadapt path
-cutadapt <- "~/anaconda3/envs/metagenomics/bin/cutadapt" # cutadapt version 4.9
+cutadapt <- "/home/jose/anaconda3/envs/metagenomics/bin/cutadapt" # cutadapt version 4.9
 FWD <- "GTGYCAGCMGCCGCGGTAA" # 515F
 REV <- "GGACTACNVGGGTWTCTAAT" # 806R
 FWD.RC <- dada2::rc(FWD)
@@ -45,26 +45,11 @@ source("taxa_summary.R", local = TRUE)
 
 url <- "https://zenodo.org/records/4587955/files/silva_nr99_v138.1_train_set.fa.gz"
 download_file(url, destfile = paste0(dbpath, "/silva_nr99_v138.1_train_set.fa.gz"))
+ref1 <- paste0(dbpath, "silva_nr99_v138.1_train_set.fa.gz")
 
 url <- "https://zenodo.org/records/4587955/files/silva_species_assignment_v138.1.fa.gz"
 download_file(url, destfile = paste0(dbpath, "/silva_species_assignment_v138.1.fa.gz"))
-
-url <- "https://ftp.ncbi.nlm.nih.gov/blast/db/16S_ribosomal_RNA.tar.gz"
-download_file(url, destfile = paste0(dbpath, "/16SMicrobial.tar.gz"))
-ref1 <- paste0(dbpath, "silva_nr99_v138.1_train_set.fa.gz")
 ref2 <- paste0(dbpath, "silva_species_assignment_v138.1.fa.gz")
-ref3 <- paste0(dbpath, "16SMicrobial.tar.gz")
-
-create_fa_from_blast <- function(ref3 ){
-  outfile <- paste0(dbpath, "16SMicrobial.fa.gz")
-  if (!file.exists(outfile)) {
-    system(glue("tar zxf {ref3} -C {dbpath}"))
-    system(glue("~/anaconda3/envs/metagenomics/bin/blastdbcmd -db {dbpath}16S_ribosomal_RNA -entry all -out {dbpath}16SMicrobial.fa"))
-    system(glue("gzip {dbpath}16SMicrobial.fa"))
-  }
-  return(outfile)
-}
-ref3 <- create_fa_from_blast(ref3)
 
 lapply(fastq.folders.list, function(fastq.folder) {
     print(paste0("Processing: ", fastq.folder))
@@ -100,7 +85,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
     log.cut <- gsub("_R1.fastq.gz", ".log", fnFs.cut)
 
     # launch cutadapt
-    keep_res <- mclapply(seq_along(fnFs), function(i) {
+   keep_res <- mclapply(seq_along(fnFs), function(i) {
         if (!file.exists(fnFs.cut[i])) {
             system2(cutadapt,
                 stdout = log.cut[i], stderr = log.cut[i], # log file
@@ -175,71 +160,23 @@ lapply(fastq.folders.list, function(fastq.folder) {
     seqtab.nochim.nocontam <- seqtab.nochim[,!colnames(seqtab.nochim) %in% contam_asvs]
     
     # assign tax
-    taxatab <- assign_taxonomy(seqtab.nochim.nocontam, ref1, ref2, ref3, outfiles.folder)
-    spec_silva <- taxatab[[2]]
-    spec_ncbi <- taxatab[[3]]
-    seqs <- taxatab[[4]]
-    taxtab <- taxatab[[1]]
-
-    ##############################################################################
-    # lo que hace es un merge de addSpecies de Silva y de NCBI
-    SVformat = paste("%0",nchar(as.character(ncol(seqtab.nochim.nocontam))),"d", sep = "")
-    svid = paste0("ASV_", sprintf(SVformat, seq(ncol(seqtab.nochim.nocontam))))
-
-    s_silva = as.data.frame(spec_silva, stringsAsFactors = FALSE)
-    rownames(s_silva) = svid
-
-    s_ncbi = as.data.frame(spec_ncbi, stringsAsFactors = FALSE)
-    rownames(s_ncbi) = svid
-    s_ncbi$Genus = gsub("\\[|\\]", "", s_ncbi$Genus)
-
-    s_merged = cbind(s_ncbi, s_silva)
-    colnames(s_merged) = c("nGenus","nSpecies","sGenus","sSpecies")
-    s_merged1 = s_merged[!is.na(s_merged$nSpecies),]
-    colnames(s_merged1)[1:2] = c("Genus","Species")
-    s_merged2 = s_merged[is.na(s_merged$nSpecies) & !is.na(s_merged$sSpecies),]
-    colnames(s_merged2)[3:4] = c("Genus","Species")
-    s_merged3 = s_merged[is.na(s_merged$nSpecies) & is.na(s_merged$sSpecies),]
-    colnames(s_merged3)[3:4] = c("Genus","Species")
-
-    s_final = rbind(s_merged1[,c("Genus","Species")], s_merged2[,c("Genus","Species")],
-                    s_merged3[,c("Genus","Species")])
-    s_final = s_final[order(row.names(s_final)),]
-    s_final = as.matrix(s_final)
-    if("Genus" %in% colnames(taxtab$tax)) {
-      gcol = which(colnames(taxtab$tax) == "Genus")
-    } else {
-      gcol = ncol(taxtab$tax)
-    }
-
-    matchGenera <- function(gen.tax, gen.binom, split.glyph = "/") {
-      if(is.na(gen.tax) || is.na(gen.binom)) { return(FALSE) }
-      if((gen.tax == gen.binom) ||
-         grepl(paste0("^", gen.binom, "[ _", split.glyph, "]"), gen.tax) ||
-         grepl(paste0(split.glyph, gen.binom, "$"), gen.tax)) {
-        return(TRUE)
-      } else {
-        return(FALSE)
-      }
-    }
-
-    gen.match = mapply(matchGenera, taxtab$tax[,gcol], s_final[,1])
-    taxtab$tax = cbind(taxtab$tax, s_final[,2])
-    colnames(taxtab$tax)[ncol(taxtab$tax)] = "Species"
-    print(paste(sum(!is.na(s_final[,2])), "out of",
-                nrow(s_final), "were assigned to the species level."))
-    taxtab$tax[!gen.match,"Species"] = NA
-    print(paste("Of which", sum(!is.na(taxtab$tax[,"Species"])),
-                "had genera consistent with the input table."))
+    tax_out <- assign_taxonomy(seqtab.nochim.nocontam, ref1, ref2, outfiles.folder)
+    taxatab = tax_out[[1]]
+    seqs = tax_out[[2]]
+    
+    
     # #' 
     # #' # Multiple sequence alignment
     # #' 
-    # #' Prepare a `data.frame` `df` from `seqtab.nochim` and `taxtab`.
+    # #' Prepare a `data.frame` `df` from `seqtab.nochim.nocontam` and `taxatab`.
     # #' 
     # ## ----prepare-df---------------------------------------------------------------
+    SVformat = paste("%0",nchar(as.character(ncol(seqtab.nochim.nocontam))),"d", sep = "")
+    svid = paste0("ASV_", sprintf(SVformat, seq(ncol(seqtab.nochim.nocontam))))
+    
     df = data.frame(sequence = seqs, abundance = colSums(seqtab.nochim.nocontam), stringsAsFactors = FALSE)
     df$id = svid
-    df = merge(df, as.data.frame(taxtab), by = "row.names")
+    df = merge(df, as.data.frame(taxatab), by = "row.names")
     rownames(df) = df$id
     df = df[order(df$id),2:ncol(df)]
     
@@ -289,8 +226,8 @@ lapply(fastq.folders.list, function(fastq.folder) {
     # #' 
     # ## ----set-raxml-path, eval = FALSE---------------------------------------------
     # Multithreading and AVX2 instruction set for better performance.
-    raxml = "~/anaconda3/envs/metagenomics/bin/raxmlHPC-PTHREADS-AVX"		# e.g. /usr/local/bin/raxmlHPC-PTHREADS-AVX.
-    raxmlng = "~/anaconda3/envs/metagenomics/bin/raxml-ng"	# e.g. /usr/local/bin/raxml-ng
+    raxml = "/home/jose/anaconda3/envs/metagenomics/bin/raxmlHPC-PTHREADS-AVX2"		# e.g. /usr/local/bin/raxmlHPC-PTHREADS-AVX2.
+    raxmlng = "/home/jose/anaconda3/envs/metagenomics/bin/raxml-ng"	# e.g. /usr/local/bin/raxml-ng
     
     construct_tree <- function(raxml, raxmlng){
       
@@ -355,15 +292,12 @@ lapply(fastq.folders.list, function(fastq.folder) {
     )
     
     # Create taxonomy table.
-    new_taxtab = taxtab
-    rownames(new_taxtab$tax) = df[match(rownames(new_taxtab$tax), df$sequence),]$id
-    tax = as.data.frame(new_taxtab$tax)
-    tax$Family = as.character(tax$Family)
-    tax$Genus = as.character(tax$Genus)
-    write.table(tax, "ASVs_taxonomy.tsv",
-                sep = "\t", quote = F, col.names = NA
-    )
-    write.table(new_taxtab, "ASVs_taxonomy_scores.tsv",
+    new_taxatab = taxatab
+    rownames(new_taxatab) = df[match(rownames(new_taxatab), df$sequence),]$id
+    new_taxatab = as.data.frame(new_taxatab)
+    new_taxatab$Family = as.character(new_taxatab$Family)
+    new_taxatab$Genus = as.character(new_taxatab$Genus)
+    write.table(new_taxatab, "ASVs_taxonomy.tsv",
                 sep = "\t", quote = F, col.names = NA
     )
       
@@ -375,10 +309,10 @@ lapply(fastq.folders.list, function(fastq.folder) {
     asv_fasta <- c(rbind(asv_headers, asv_seqs))
     write(asv_fasta, "ASVs_sequences.fa")
 
-    # create and export phyloseq object for later analysis
-    ps = phyloseq(tax_table(as.matrix(tax)),
-                  sample_data(sample_tab),
-                  otu_table(new_seqtab, taxa_are_rows = TRUE),
-                  phy_tree(raxml_tree))
-    save(ps, file = file.path(outfiles.folder, "phyloseq_object.rdata"))
+    # # create and export phyloseq object for later analysis
+    # ps = phyloseq(tax_table(as.matrix(new_taxatab)),
+    #               sample_data(sample_tab),
+    #               otu_table(new_seqtab, taxa_are_rows = TRUE),
+    #               phy_tree(raxml_tree))
+    # save(ps, file = file.path(outfiles.folder, "phyloseq_object.rdata"))
 })

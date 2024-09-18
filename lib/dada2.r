@@ -63,29 +63,16 @@ removebimera_function <- function(seqtab, outfiles.folder){
   return(seqtab.nochim)
 }
 
-assign_taxonomy <- function(seqtab.nochim, ref1, ref2, ref3, outfiles.folder){
-  seqs = getSequences(seqtab.nochim)
+assign_taxonomy <- function(seqtab, ref1, ref2, outfiles.folder){
+  seqs = getSequences(seqtab)
   rds_taxa <- file.path(outfiles.folder, "taxa.rds")
   if (!file.exists(rds_taxa)) {
     set.seed(12345)
-    taxtab = assignTaxonomy(seqs, refFasta = ref1, minBoot = 80, tryRC = TRUE, verbose = TRUE,
-                            outputBootstraps = TRUE, multithread = TRUE)
-    saveRDS(taxtab, file = rds_taxa)
+    taxatab = assignTaxonomy(seqs, refFasta = ref1, minBoot = 80, tryRC = TRUE, verbose = TRUE,
+                            outputBootstraps = FALSE, multithread = TRUE)
+    taxatab = addSpecies(taxatab, refFasta = ref2, allowMultiple = FALSE, tryRC = TRUE)
+    saveRDS(taxatab, file = rds_taxa)
   }
-  taxtab = readRDS(rds_taxa)
-  rds_silva <- file.path(outfiles.folder, "spec_silva.rds")
-  if (!file.exists(rds_silva)) {
-    set.seed(12345)
-    spec_silva = assignSpecies(seqs, ref2, allowMultiple = FALSE, tryRC = TRUE, verbose = TRUE)
-    saveRDS(spec_silva, file = rds_silva)
-  }
-  spec_silva = readRDS(rds_silva)
-  rds_ncbi <- file.path(outfiles.folder, "spec_ncbi.rds")
-  if (!file.exists(rds_ncbi)) {
-    set.seed(12345)
-    spec_ncbi = assignSpecies(seqs, ref3, allowMultiple = FALSE, tryRC = TRUE, verbose = TRUE)
-    saveRDS(spec_ncbi, file = rds_ncbi)
-  }
-  spec_ncbi = readRDS(rds_ncbi)
-  return(list(taxtab, spec_silva, spec_ncbi, seqs))
+  taxatab = readRDS(rds_taxa)
+  return(list(taxatab, seqs))
 }
