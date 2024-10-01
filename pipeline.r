@@ -120,7 +120,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
     # qc and trunc estimation
     raw_fqc <- fastq_quality_control(sample_sheet, images.folder, raw = TRUE)
     trunc_parameters <- lapply(raw_fqc, trunc_estimation, min_qual = 30)
-    cat(paste0("\nTrunc parameters: ", trunc_parameters, "\n"))
+    message(paste0("Trunc parameters:", "\nFW: ", trunc_parameters$forwardReads, "\nRV: ", trunc_parameters$reverseReads))
 
     # set filter files
     filtFs <- file.path(filt.folder, basename(fnFs))

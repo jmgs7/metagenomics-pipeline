@@ -1,3 +1,5 @@
+suppressMessages(library(dada2))
+
 filter_and_trim <- function(fnFs, filtFs, fnRs, filtRs, trunc_parameters, outfiles.folder) {
     rds_file <- file.path(outfiles.folder, "filt_and_trim.rds")
     if (!file.exists(rds_file)) {

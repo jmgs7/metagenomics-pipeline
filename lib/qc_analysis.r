@@ -1,3 +1,9 @@
+suppressMessages(library(tidyverse))
+suppressMessages(library(data.table))
+suppressMessages(library(parallel))
+suppressMessages(library(glue))
+suppressMessages(library(ShortRead))
+
 #' Get Quantile from a Distribution
 #'
 #' This function retrieves a quantile value from a cumulative distribution.
@@ -80,9 +86,9 @@ analyse_read <- function(col.name, samplesheet, result_folder, raw) {
       geom_tile(aes(fill = Count)) +
       scale_fill_gradient(low = "#F5F5F5", high = "black") +
       geom_line(data = statdf.summary, aes(y = Mean), color = "#66C2A5") +
-      geom_line(data = statdf.summary, aes(y = Q25), color = "#FC8D62", size = 0.25, linetype = "dashed") +
-      geom_line(data = statdf.summary, aes(y = Q50), color = "#FC8D62", size = 0.25) +
-      geom_line(data = statdf.summary, aes(y = Q75), color = "#FC8D62", size = 0.25, linetype = "dashed") +
+      geom_line(data = statdf.summary, aes(y = Q25), color = "#FC8D62", linewidth = 0.25, linetype = "dashed") +
+      geom_line(data = statdf.summary, aes(y = Q50), color = "#FC8D62", linewidth = 0.25) +
+      geom_line(data = statdf.summary, aes(y = Q75), color = "#FC8D62", linewidth = 0.25, linetype = "dashed") +
       ylab("Quality Score") +
       xlab("Cycle") +
       theme_bw() +
@@ -134,18 +140,20 @@ fastq_quality_control <- function(samplesheet, result_folder, raw) {
 #'
 #' @param fqc_table A data frame containing quality control metrics.
 #' @param min_qual The minimum quality score to consider for truncation. Default is 25.
+#' @param p The minimum proportion of reads that reach a certain cycle to be considered. Default is 0.75. Cycles that have less than this percentages are trimmed out.
 #' @return The estimated truncation cycle.
 trunc_estimation <- function(fqc_table, min_qual = 25, p = 0.75) {
-  # Filter the quality control table for cycles with median quality below or equal to the minimum quality
+  # Filter the quality control table for cycles with median quality below or equal to the minimum quality that contains at least p proportion of reads.
   nreads <- max(fqc_table$Count)
+  min_trimming <- max(fqc_table$Cycle) - 10
   fqc_table <- fqc_table %>% filter(Count >= nreads * p)
   fqc_table_filt <- fqc_table %>%
     filter(Median <= min_qual)
-  # If no rows are found after filtering, return the maximum cycle minus 10
+  # If no rows are found after filtering, return the maximum cycle of the trimmed reads that meet the p threshold BUT cut at least the last 10 positions.
   if (nrow(fqc_table_filt) == 0) {
-    return(max(fqc_table$Cycle) - 10)
+    return(min(max(fqc_table$Cycle), min_trimming))
   } else {
-    # Otherwise, return the minimum cycle from the filtered minus the last 10 positions.
-    return(min(fqc_table_filt$Cycle - 10))
+    # Otherwise, return the minimum cycle from the filtered BUT it will always cut at least the last 10 positions of the trimmed reads.
+    return(min(min(fqc_table_filt$Cycle), min_trimming))
   }
 }
