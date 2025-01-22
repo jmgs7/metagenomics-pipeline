@@ -14,8 +14,8 @@ suppressMessages(library(DESeq2))
 suppressMessages(library(vegan))
 suppressMessages(library(phangorn))
 suppressMessages(library(ShortRead))
-source("~/Documents/Pipelines/metagenomics/lib/qc_analysis.r")
-source("~/Documents/Pipelines/metagenomics/lib/dada2.r")
+source("~/Pipelines/metagenomics/lib/qc_analysis.r")
+source("~/Pipelines/metagenomics/lib/dada2.r")
 
 folders.list <- list.dirs(recursive = FALSE)
 fastq.folders.list <- folders.list[grepl("rawReads", folders.list)]
@@ -34,7 +34,7 @@ dbpath <- "db/"
 if (!file.exists(dbpath)) dir.create(dbpath)
 
 download_file <- function(url, destfile){
-  if (!file.exists(destfile)){
+  if (!file.exists(destfile)) {
     download.file(url, destfile = destfile)
   }
 }
@@ -68,15 +68,11 @@ lapply(fastq.folders.list, function(fastq.folder) {
 
     # list fastq files
     fns <- sort(list.files(fastq.folder, full.names = TRUE))
-    fns <- fns[grep("MDMesa", fns)]
+    # fns <- fns[grep("MDMesa", fns)]
     fns <- fns[grep(".fastq.gz", fns)]
     fnFs <- fns[grep("_R1_", fns)]
     fnRs <- fns[grep("_R2_", fns)]
-    sample.names <- basename(fnFs)
-    sample.names <- unlist(lapply(sample.names, function(x) {
-        y <- unlist(strsplit(x, "_MDMesa"))[1]
-        return(y)
-    }))
+    sample.names <- sapply(strsplit(basename(fnFs), "_L001"), `[`, 1)
 
     # output of cutadapt
     fnFs.cut <- file.path(trimmed.folder, paste0(sample.names, "_R1.fastq.gz"))
@@ -85,7 +81,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
     log.cut <- gsub("_R1.fastq.gz", ".log", fnFs.cut)
 
     # launch cutadapt
-   keep_res <- mclapply(seq_along(fnFs), function(i) {
+    keep_res <- mclapply(seq_along(fnFs), function(i) {
         if (!file.exists(fnFs.cut[i])) {
             system2(cutadapt,
                 stdout = log.cut[i], stderr = log.cut[i], # log file
@@ -154,11 +150,13 @@ lapply(fastq.folders.list, function(fastq.folder) {
     
     # launch decontam.
     # You need to adjust the number of FALSES and TRUES and their order according to you sample distribution.
-    vector_for_decontam <-  grepl("control-negativo", rownames(seqtab.nochim), ignore.case = TRUE) # TRUE is the negative control.
-    contam_df <- isContaminant(seqtab.nochim, neg = vector_for_decontam)
-    contam_asvs <- row.names(contam_df[contam_df$contaminant == TRUE, ])
-    seqtab.nochim.nocontam <- seqtab.nochim[,!colnames(seqtab.nochim) %in% contam_asvs]
+    # vector_for_decontam <-  grepl("Knegativo", rownames(seqtab.nochim), ignore.case = TRUE) # TRUE is the negative control.
+    # contam_df <- isContaminant(seqtab.nochim, neg = vector_for_decontam)
+    # contam_asvs <- row.names(contam_df[contam_df$contaminant == TRUE, ])
+    # seqtab.nochim.nocontam <- seqtab.nochim[,!colnames(seqtab.nochim) %in% contam_asvs]
     
+    seqtab.nochim.nocontam <- seqtab.nochim
+
     # assign tax
     tax_out <- assign_taxonomy(seqtab.nochim.nocontam, ref1, ref2, outfiles.folder)
     taxatab = tax_out[[1]]
@@ -187,7 +185,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
     
     align_seqs <- function(df){
       rds_align <- file.path(outfiles.folder, "align.rds")
-      if (!file.exists(rds_align)){
+      if (!file.exists(rds_align)) {
         alignment = AlignSeqs(Biostrings::DNAStringSet(setNames(df$sequence, df$id)), anchor = NA, processors = detectCores())
         saveRDS(alignment, file = rds_align)
       }
@@ -204,12 +202,12 @@ lapply(fastq.folders.list, function(fastq.folder) {
     
     export_alignment <- function(alignment, outfiles.folder){
       rds_phang <- file.path(outfiles.folder,"phan.rds")
-      if (!file.exists(rds_phang)){
+      if (!file.exists(rds_phang)) {
         phang.align = phyDat(as(alignment, "matrix"), type = "DNA")
         saveRDS(phang.align, file = rds_phang)
       }
       phang.align <- readRDS(rds_phang)
-      if (!file.exists(glue("{outfiles.folder}/alignment.aln"))){
+      if (!file.exists(glue("{outfiles.folder}/alignment.aln"))) {
         write.phyDat(phang.align, file = glue("{outfiles.folder}/alignment.fasta"), format = "fasta")
         write.phyDat(phang.align, file = glue("{outfiles.folder}/alignment.aln"), format = "phylip")
       }
@@ -233,7 +231,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
       
       # 1. Construct the tree using GTRCAT model with RAxML.
       raxml_tree <- glue("{outfiles.folder}/RAxML_binaryModelParameters.raxml_tree_GTRCAT")
-      if (!file.exists(raxml_tree)){
+      if (!file.exists(raxml_tree)) {
         system2(raxml, args = c("-T $THREADS", "-f E", "-p 1234", "-x 5678", "-m GTRCAT", "-N 1",
                                 glue("-s {outfiles.folder}/alignment.aln"), "-n raxml_tree_GTRCAT"))
         system(glue("mv RAxML* {outfiles.folder}"))
@@ -241,7 +239,7 @@ lapply(fastq.folders.list, function(fastq.folder) {
       
       # 2. Optimize the topology using RAxML Next Generation (raxmlng).
       raxmlng_tree <- glue("{outfiles.folder}/GTRCAT.raxml.bestModel")
-      if (!file.exists(raxmlng_tree)){
+      if (!file.exists(raxmlng_tree)) {
         system2(raxmlng, args = c("--evaluate", "--force", "--seed 1234", "--log progress", "--threads $THREADS",
                                   glue("--msa {outfiles.folder}/alignment.fasta"),  "--model GTR+G", "--brlen scaled",
                                   glue("--tree {outfiles.folder}/RAxML_fastTree.raxml_tree_GTRCAT"), "--prefix GTRCAT"))
@@ -258,26 +256,26 @@ lapply(fastq.folders.list, function(fastq.folder) {
     # ## ----import-tree--------------------------------------------------------------
     raxml_tree = construct_tree(raxml, raxmlng)
     
-    # Obtenemos la información de cada muestra a través de su nombre de archivo, que hemos modificado para que sean altamente informativos.
-    filenames <- list.files(fastq.folder, pattern = "R1_001.fastq.gz", full.names = FALSE)
-    filenames <- gsub("_R1_001.fastq.gz", "", filenames)
+    # # Obtenemos la información de cada muestra a través de su nombre de archivo, que hemos modificado para que sean altamente informativos.
+    # filenames <- list.files(fastq.folder, pattern = "R1_001.fastq.gz", full.names = FALSE)
+    # filenames <- gsub("_R1_001.fastq.gz", "", filenames)
     
-    sample_tab <- rbindlist(lapply(filenames, function(col.name){
-      shunks <- unlist(strsplit(col.name,"_"))
-      sample_name <- shunks[1]
-      batch <- shunks[4]
+    # sample_tab <- rbindlist(lapply(filenames, function(col.name){
+    #   shunks <- unlist(strsplit(col.name,"_"))
+    #   sample_name <- shunks[1]
+    #   batch <- shunks[4]
       
-      shunks <- unlist(strsplit(sample_name,"-"))
-      sample <- shunks[1]
-      sample_number <- shunks[2]
-      time <- shunks[3]
-      group <- shunks[length(shunks)]
-      time_group = paste0(time, "_", group)
-      data.frame(sample_name = sample_name, sample = sample, sample_number = sample_number, time = time, group = group, time_group = time_group, batch = batch)
-    })) %>% as.data.frame()
+    #   shunks <- unlist(strsplit(sample_name,"-"))
+    #   sample <- shunks[1]
+    #   sample_number <- shunks[2]
+    #   time <- shunks[3]
+    #   group <- shunks[length(shunks)]
+    #   time_group = paste0(time, "_", group)
+    #   data.frame(sample_name = sample_name, sample = sample, sample_number = sample_number, time = time, group = group, time_group = time_group, batch = batch)
+    # })) %>% as.data.frame()
     
-    rownames(sample_tab) <- sample_tab$sample_name
-    write.table(sample_tab, "sample_sheet.tsv", sep = "\t", quote = F, col.names = NA)
+    # rownames(sample_tab) <- sample_tab$sample_name
+    # write.table(sample_tab, "sample_sheet.tsv", sep = "\t", quote = F, col.names = NA)
 
     # #' 
     # #' # Handoff to `phyloseq`

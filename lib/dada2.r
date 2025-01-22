@@ -5,7 +5,7 @@ filter_and_trim <- function(fnFs, filtFs, fnRs, filtRs, trunc_parameters, outfil
     if (!file.exists(rds_file)) {
         # Perform filtering and trimming
         out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
-            # Need to keep paramters consistent between runs of the same study
+            # Need to keep parameters consistent between runs of the same study
             truncLen = c(trunc_parameters$forwardReads, trunc_parameters$reverseReads),
             maxN = 0, truncQ = 2, maxEE = c(2, 2),
             rm.phix = TRUE, compress = TRUE, verbose = TRUE, multithread = TRUE
