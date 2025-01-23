@@ -16,6 +16,7 @@ suppressMessages(library(phangorn))
 suppressMessages(library(ShortRead))
 source("~/Pipelines/metagenomics/lib/qc_analysis.r")
 source("~/Pipelines/metagenomics/lib/dada2.r")
+source("~/Pipelines/16S-SNAPP-py3/decontam.R")
 
 folders.list <- list.dirs(recursive = FALSE)
 fastq.folders.list <- folders.list[grepl("rawReads", folders.list)]
@@ -150,12 +151,17 @@ lapply(fastq.folders.list, function(fastq.folder) {
     
     # launch decontam.
     # You need to adjust the number of FALSES and TRUES and their order according to you sample distribution.
-    # vector_for_decontam <-  grepl("Knegativo", rownames(seqtab.nochim), ignore.case = TRUE) # TRUE is the negative control.
-    # contam_df <- isContaminant(seqtab.nochim, neg = vector_for_decontam)
-    # contam_asvs <- row.names(contam_df[contam_df$contaminant == TRUE, ])
-    # seqtab.nochim.nocontam <- seqtab.nochim[,!colnames(seqtab.nochim) %in% contam_asvs]
+    vector_for_decontam <-  grepl("Knegativo", rownames(seqtab.nochim), ignore.case = TRUE) # TRUE is the negative control.
+    contam_df <- isContaminant(seqtab.nochim, neg = vector_for_decontam, threshold=0.4)
+    contam_asvs <- row.names(contam_df[contam_df$contaminant == TRUE, ])
+    seqtab.nochim.nocontam <- seqtab.nochim[,!colnames(seqtab.nochim) %in% contam_asvs]
+
+    output.stats <- paste0(outfiles.folder, "/decontam_stats.tsv")
+    write.table(contam_df, file = output.stats, sep = "\t", row.names = TRUE, col.names = NA, quote = FALSE)
+    plotName = gsub("\\.\\w+", "", output.stats)
+    plotDecontamHist(contam_df, paste0(plotName, "_plot.pdf"), title = basename(plotName))
     
-    seqtab.nochim.nocontam <- seqtab.nochim
+    # seqtab.nochim.nocontam <- seqtab.nochim
 
     # assign tax
     tax_out <- assign_taxonomy(seqtab.nochim.nocontam, ref1, ref2, outfiles.folder)
